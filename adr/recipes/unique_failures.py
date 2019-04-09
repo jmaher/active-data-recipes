@@ -113,6 +113,25 @@ def get_stats_for_week(args, config):
             total = 1 if len(configs[c]) > 0 else 0
             # assume same test fails, not multiple tests and we disable the one failing test
             unique = 1 if (sum([len(configs[x]) for x in configs]) - len(configs[c])) == 0 else 0
+            if unique:
+                thurl = "https://treeherder.mozilla.org/#/jobs?repo=%s&revision=%s"
+                print("%s (%s): " % (item, c))
+                print("  %s" % (thurl % (branches[0], item)))
+
+                import subprocess
+                p = subprocess.Popen(['hg', 'log', '-r', item], cwd='c:\\users\\elvis\\mozilla-central', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stdout, stderr = p.communicate()
+                for line in stdout.split(b'\n'):
+                    if line.startswith(b'date:') or line.startswith(b'summary:'):
+                        print("  %s" % line)
+
+                found = []
+                for i in configs[c]:
+                    if i not in found:
+                        print("    %s" % i)
+                        found.append(i)
+                print("")
+
             results.append([c, total, unique])
     return results, configs
 

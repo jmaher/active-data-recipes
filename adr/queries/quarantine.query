@@ -1,0 +1,17 @@
+where:
+    and:
+        - eq: {build.revision12: "1f8095cf308b"}
+        - in: {repo.branch.name: ["try"]}
+        - regex: {result.test: ".*/.*"}
+        - regex: {result.test: "(~(file.*|http.*))"}
+limit: 50000
+groupby:
+    - result.test
+    - run.key
+select:
+    - {"aggregate": "count", "name": "pass", "value": {"then": 1, "when": {"eq": {"result.status": "OK"}}}}
+    - {"aggregate": "count", "name": "fail", "value": {"then": 1, "when": {"eq": {"result.status": "ERROR"}}}}
+    - {"aggregate": "count", "name": "skip", "value": {"then": 1, "when": {"eq": {"result.status": "SKIP"}}}}
+from: unittest
+context:
+    test: [["--test", "--t"], {default: '', help: "Filter on specific test name"}]
