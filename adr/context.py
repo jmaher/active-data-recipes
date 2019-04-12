@@ -36,7 +36,7 @@ COMMON_CONTEXTS['branches'] = [['-B', '--branch'],
                                {'default': ["mozilla-central"],
                                 'type': str,
                                 'choices': ["mozilla-central", "mozilla-inbound", "autoland",
-                                            "beta", "release"],
+                                            "beta", "release", "try"],
                                 'action': 'append',
                                 'help': "Branches to query results from",
                                 }]

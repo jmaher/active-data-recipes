@@ -1,0 +1,15 @@
+from: treeherder
+select:
+    - {aggregate: avg, name: "average minutes", value: {div: {action.duration: 60}}}
+groupby:
+    - job.type.name
+    - build.revision12
+where:
+    and:
+        - in: {repo.branch.name: {$eval: branches}}
+        - eq: {build.type: {$eval: build_type}}
+        - prefix: {run.machine.platform: {$eval: platform}}
+        - in: {build.revision12: {$eval: revision}}
+limit: 10000
+context:
+    revision: [["-r", "--revision"], {"help": "revision to compare", "action": "append"}]

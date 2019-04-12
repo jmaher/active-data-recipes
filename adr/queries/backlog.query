@@ -1,0 +1,23 @@
+from: treeherder
+limit: 50000
+select:
+    - action.request_time
+    - action.start_time
+    - action.end_time
+    - build.revision12
+    - job.type.name
+    - repo.branch.name
+where:
+    and:
+        - eq: {run.state: 'completed'}
+        - in: {repo.branch.name: {$eval: branches}}
+        - prefix: {job.type.name: {$eval: platform_config}}
+        - regex: {job.type.name: '.*raptor.*'}
+        - not: {regex: {job.type.name: '.*power.*'}}
+        - lte:
+            repo.push.date:
+                date: {$eval: to_date}
+        - gte:
+            repo.push.date:
+                date: {$eval: from_date}
+limit: 50000
