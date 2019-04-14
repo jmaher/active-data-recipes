@@ -7,11 +7,11 @@ This is currently broken.
 """
 from __future__ import absolute_import, print_function
 
-from ..context import override
-from ..query import run_query
+#from adr.context import override
+from adr.query import run_query
 
 BROKEN = True
-RUN_CONTEXTS = [override('platform_config', hidden=True)]
+#RUN_CONTEXTS = [override('platform_config', hidden=True)]
 
 
 def run(config, args):
@@ -38,9 +38,6 @@ def run(config, args):
         if config.startswith('test-windows10-aarch64/opt'):
             continue
 
-        if index[0] == 'browser/base/content/test/general/browser_bug1261299.js':
-            print(index)
-
         if config not in passed:
             passed[config] = []
         if config not in failed:
@@ -58,11 +55,6 @@ def run(config, args):
             if index[0] not in skipped[config]:
                 skipped[config].append(index[0])
 
-#        if index[2] < 10 and index[1].startswith('test-windows10-64/opt'):
-#            print(index[0].strip())
-#            result.append([index[0].strip()])
-
-#    print(passed['test-windows10-64-qr/opt-mochitest-webgl1-core-e10s'])
 
     configs = []
     unique_tests = {}
