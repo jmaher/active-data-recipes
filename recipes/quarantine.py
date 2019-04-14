@@ -7,14 +7,10 @@ This is currently broken.
 """
 from __future__ import absolute_import, print_function
 
-#from adr.context import override
 from adr.query import run_query
 
-BROKEN = True
-#RUN_CONTEXTS = [override('platform_config', hidden=True)]
 
-
-def run(config, args):
+def run(args):
     # These 4 args are defined so that we can share the queries with the
     # 'intermittent_test_data' recipe.
     args.test_name = '(~(file.*|http.*))'
@@ -22,7 +18,7 @@ def run(config, args):
 #    args.result = [false]
     args.platform_config = "test-%s/%s" % (args.platform, args.build_type)
 
-    tests = run_query('quarantine', config, args)['data']
+    tests = run_query('quarantine', args)['data']
 
     intermittent_tests = []
     # for each result, match up the revision/name with jobs, if a match, save testname
@@ -35,7 +31,8 @@ def run(config, args):
 
     for index in tests:
         config = index[1]
-        if config.startswith('test-windows10-aarch64/opt'):
+        if not config:
+            print("no config: %s" % index)
             continue
 
         if config not in passed:
@@ -59,7 +56,7 @@ def run(config, args):
     configs = []
     unique_tests = {}
     for config in passed.keys():
-        parts = config.split('/')
+        parts = str(config).split('/')
         c = parts[0] + '/' + parts[1].split('-')[0]
         if c not in configs:
             configs.append(c)

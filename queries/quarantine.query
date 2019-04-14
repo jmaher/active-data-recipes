@@ -1,6 +1,6 @@
 where:
     and:
-        - eq: {build.revision12: "1f8095cf308b"}
+        - eq: {build.revision12: "c698aa20f84b"}
         - in: {repo.branch.name: ["try"]}
         - regex: {result.test: ".*/.*"}
         - regex: {result.test: "(~(file.*|http.*))"}
