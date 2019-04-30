@@ -1,6 +1,6 @@
 where:
     and:
-        - eq: {build.revision12: "c698aa20f84b"}
+        - eq: {build.revision12: "0efe3bbc5728"}
         - in: {repo.branch.name: ["try"]}
         - regex: {result.test: ".*/.*"}
         - regex: {result.test: "(~(file.*|http.*))"}
@@ -9,7 +9,7 @@ groupby:
     - result.test
     - run.key
 select:
-    - {"aggregate": "count", "name": "pass", "value": {"then": 1, "when": {"eq": {"result.status": "OK"}}}}
-    - {"aggregate": "count", "name": "fail", "value": {"then": 1, "when": {"eq": {"result.status": "ERROR"}}}}
+    - {"aggregate": "count", "name": "pass", "value": {"then": 1, "when": {"eq": {"result.ok": true}}}}
+    - {"aggregate": "count", "name": "fail", "value": {"then": 1, "when": {"eq": {"result.ok": false}}}}
     - {"aggregate": "count", "name": "skip", "value": {"then": 1, "when": {"eq": {"result.status": "SKIP"}}}}
 from: unittest

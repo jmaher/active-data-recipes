@@ -30,6 +30,8 @@ def run(args):
     skipped = {}
 
     for index in tests:
+        if index[0] == 'dom/browser-element/mochitest/test_browserElement_inproc_Auth.html':
+            print(index)
         config = index[1]
         if not config:
             print("no config: %s" % index)
@@ -42,10 +44,10 @@ def run(args):
         if config not in skipped:
             skipped[config] = []
 
-        if index[2] == 10:
+        if index[2] == 10 and not index[4] == 10:
             if index[0] not in passed[config]:
                 passed[config].append(index[0])
-        if index[3] == 10:
+        if index[3] > 5:
             if index[0] not in failed[config]:
                 failed[config].append(index[0])
         if index[4] == 10:
@@ -55,12 +57,16 @@ def run(args):
 
     configs = []
     unique_tests = {}
-    for config in passed.keys():
+    # TODO: have logic to test for passed or failed tests
+    data = passed
+#    data = failed
+
+    for config in data.keys():
         parts = str(config).split('/')
         c = parts[0] + '/' + parts[1].split('-')[0]
         if c not in configs:
             configs.append(c)
-        for item in passed[config]:
+        for item in data[config]:
             if item not in unique_tests.keys():
                 unique_tests[item] = {}
             unique_tests[item][c] = 1
@@ -69,7 +75,7 @@ def run(args):
     header = "test"
     for c in configs:
         header += ",%s" % c
-#    print(header)
+    print(header)
     for item in unique_tests.keys():
         string = item
         test = unique_tests[item]
@@ -78,7 +84,7 @@ def run(args):
             if c in test.keys():
                 value = test[c]
             string += ",%s" % value
-#        print("%s" % string)
+        print("%s" % string)
 
     result.insert(0, ['Config', 'Pass', 'Fail', "skip"])
     return result
