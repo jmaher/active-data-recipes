@@ -22,17 +22,19 @@ def run(args):
     data = run_query('config_intermittents', args)["data"]
     result = []
     for record in data:
-        if not record or not record[args.sort_key]:
+#        if isinstance(record[1], list):
+#            record[1] = record[1][-1]
+        if record[1] is None:
             continue
-        if isinstance(record[1], list):
-            record[1] = record[1][-1]
         if record[2] is None:
             continue
-        if record[3] is None:
+        record.append(float(record[2] / (record[1] * 1.0)))
+        if not record or not record[args.sort_key]:
             continue
-        record.append(float(record[3] / (record[2] * 1.0)))
+
         result.append(record)
 
     result = sorted(result, key=lambda k: k[args.sort_key], reverse=True)[:args.limit]
-    result.insert(0, ['Platform', 'Type', 'Num Jobs', 'Number failed', '%% failed'])
+#    result.insert(0, ['Platform', 'Type', 'Num Jobs', 'Number failed', '%% failed'])
+    result.insert(0, ['Job Name', 'Num Jobs', 'Number failed', '%% failed'])
     return result
