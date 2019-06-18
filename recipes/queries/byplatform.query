@@ -1,0 +1,20 @@
+where:
+    and:
+        - gte: [repo.push.date, {date: {$eval: from_date}}]
+        - lte: [repo.push.date, {date: {$eval: to_date}}]
+        - in: {repo.branch.name: {$eval: branches}}
+        - prefix: {job.type.name: {$eval: platform_config}}
+        - in: {build.type: {$eval: build_type}}
+limit: 10000
+select:
+    - job.type.name
+    - run.tier
+    - build.platform
+    - build.type
+    - action.end_time
+    - action.request_time
+    - action.start_time
+    - failure.classification
+    - repo.branch.name
+    - build.revision
+from: treeherder
