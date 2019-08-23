@@ -94,7 +94,8 @@ OTHER = [
     'oak',
     'mozilla-beta',
     'mozilla-release',
-    'mozilla-esr60'
+    'mozilla-esr60',
+    'mozilla-esr68'
 ]
 
 BRANCH_WHITELIST = [
@@ -108,6 +109,7 @@ BRANCH_WHITELIST = [
     'oak',
     'mozilla-beta',
     'mozilla-release',
+    'mozilla-esr68',
     'mozilla-esr60'
 ]
 
@@ -299,7 +301,7 @@ def parseJobName(jobname, buildtype):
     return suite
 
 
-def get_metrics_for_day(args):
+def get_metrics_for_day(args, lag_by_rev):
     # These 4 args are defined so that we can share the queries with the
     # 'intermittent_test_data' recipe.
     args.platform_config = "test-%s" % (args.platform)
@@ -307,7 +309,7 @@ def get_metrics_for_day(args):
     try:
         result = run_query('byplatform', args)['data']
     except:
-        return {}
+        return {}, lag_by_rev
 
     results = {}
     # for each result, match up the revision/name with jobs, if a match, save testname
@@ -315,13 +317,18 @@ def get_metrics_for_day(args):
     if len(result['build.type']) == 10000:
         print("JMAHER: WARNING: hit 10K max items for %s, %s, %s" % (args.from_date, args.build_type, args.branches))
 
+    revisions = {}
     for item in result['job.type.name']:
         index += 1
+
+        if result['build.revision'][index] not in revisions.keys():
+            revisions[result['build.revision'][index]] = {'branch': result['repo.branch.name'][index], 'taskids': []}
+        revisions[result['build.revision'][index]]['taskids'].append(result['run.taskcluster.id'][index])
+
         tier = result['run.tier'][index]
         platform = result['build.platform'][index]
         buildtype = result['build.type'][index]
         duration = result['action.end_time'][index] - result['action.start_time'][index]
-        lag = result['action.start_time'][index] - result['action.request_time'][index]
         failure = result['failure.classification'][index]
         if failure == 'not classified':
             failure = 'pass'
@@ -332,32 +339,17 @@ def get_metrics_for_day(args):
         if duration < 0 or duration > 100000:
             duration = 1200
 
-        if lag < 0 or lag > 100000:
-            continue
-
-
-        trylag = 0
-        trunklag = 0
-        if result['repo.branch.name'][index] == 'try':
-            trylag = lag
-        else:
-            trunklag = lag
-
         suite = parseJobName(item, buildtype)
         config = "%s/%s" % (platform, buildtype)
         if config not in results.keys():
             results[config] = {}
         
         if suite not in results[config].keys():
-            results[config][suite] = {'tier': 0, 'duration': 0, 'trylag': [], 'trunklag': [], 'totaljobs': 0, 'nontryjobs': 0, 'failures': 0, 'intermittents': 0}
+            results[config][suite] = {'tier': 0, 'duration': 0, 'trylag': [], 'trunklag': [], 'taskids': {}, 'totaljobs': 0, 'nontryjobs': 0, 'failures': 0, 'intermittents': 0}
 
         # assuming tier is static for a suite/chunk
         results[config][suite]['tier'] = tier
         results[config][suite]['duration'] += duration
-        if trylag:
-            results[config][suite]['trylag'].append(trylag)
-        else:
-            results[config][suite]['trunklag'].append(trunklag)
         if result['repo.branch.name'][index] != 'try':
             results[config][suite]['nontryjobs'] += 1
         results[config][suite]['totaljobs'] += 1
@@ -366,6 +358,54 @@ def get_metrics_for_day(args):
             results[config][suite]['intermittents'] += 1
         if failure == 'failure':
             results[config][suite]['failures'] += 1
+
+        if result['build.revision'][index] not in results[config][suite]['taskids'].keys():
+            results[config][suite]['taskids'][result['build.revision'][index]] = []
+        results[config][suite]['taskids'][result['build.revision'][index]].append(result['run.taskcluster.id'][index])
+
+
+    for rev in revisions.keys():
+        if rev in lag_by_rev.keys():
+            continue
+
+        lag_by_rev[rev] = {}
+        branch = revisions[rev]['branch']
+        args.route = "tc-treeherder.v2.%s.%s" % (branch, rev)
+        try:
+            tctimes = run_query('byplatform_tasks', args)['data']
+        except Exception as e:
+            print("failure to run query: %s" % e)
+            continue
+
+        index = -1
+        for item in tctimes['task.id']:
+            index += 1
+            tid = tctimes['task.id'][index]
+            if tid not in lag_by_rev.keys():
+                if not tctimes['task.run.start_time'][index] or not tctimes['task.run.scheduled'][index]:
+                   lag = -1
+                else:
+                    lag = int(tctimes['task.run.start_time'][index] - tctimes['task.run.scheduled'][index])
+
+                if lag < 0 or lag > 100000:
+                    continue
+                lag_by_rev[rev][tid] = lag
+
+    tids = lag_by_rev.keys()
+    # TODO: match task.id with results[...] and add lag
+    for c in results.keys():
+        for s in results[c].keys():
+            for tid_rev in results[c][s]['taskids']:
+                if tid_rev not in tids:
+                    continue
+                branch = revisions[rev]['branch']
+                for tid in results[c][s]['taskids'][tid_rev]:
+                    if tid not in lag_by_rev[tid_rev].keys():
+                        continue
+                    if 'try' in branch.lower():
+                        results[c][s]['trylag'].append(lag_by_rev[tid_rev][tid])
+                    else:
+                        results[c][s]['trunklag'].append(lag_by_rev[tid_rev][tid])
 
     for type in results:
         total = {'tier': 0, 'duration': 0, 'trylag': [], 'trunklag': [], 'totaljobs': 0, 'nontryjobs': 0, 'intermittents': 0, 'failures': 0}
@@ -378,7 +418,7 @@ def get_metrics_for_day(args):
             total['intermittents'] += results[type][s]['intermittents']
             total['failures'] += results[type][s]['failures']
         results[type]['total'] = total
-    return results
+    return results, lag_by_rev
 
 
 def merge_results(master, new):
@@ -419,7 +459,7 @@ def merge_failures(master, new):
 
 
 def writeFile(data, type, platform, date):
-    filename = '%s-%s-%s' % (date, type, platform)
+    filename = '.cache/%s-%s-%s' % (date, type, platform)
     # if blank, write stub
     if not data:
         data = {"blank": True}
@@ -430,7 +470,7 @@ def writeFile(data, type, platform, date):
 
 
 def readFile(type, platform, date):
-    filename = '%s-%s-%s' % (date, type, platform)
+    filename = '.cache/%s-%s-%s' % (date, type, platform)
     retVal = {}
     if os.path.exists(filename):
         with open(filename, 'r') as f:
@@ -462,39 +502,46 @@ def run(args):
     failures = {}
 
     platforms = ['windows10', 'windows7', 'linux64', 'linux32', 'macosx', 'android']
-#    platforms = ['windows10']
+#    platforms = ['linux64', 'linux32', 'macosx']
+#    platforms = ['windows10', 'windows7', 'android']
+    platforms = ['windows7']
     for platform in platforms:
         args.platform = platform
         day = startday
 
         # do daily to avoid 10K query limit for metrics
-        while day < end:
+        lag_by_rev = readFile("tids", "all", "all")
+        while day <= end:
             args.from_date = str(day)
+            day += timedelta(days=1)
+            args.to_date = str(day)
+            if str(day) != '2019-07-29':
+                continue
+
             t = readFile("stats", args.platform, args.from_date)
             f = readFile("failures", args.platform, args.from_date)
             
-            day += timedelta(days=1)
-            args.to_date = str(day)
-            args.build_type = ['debug', 'asan', 'opt', 'pgo']
             branches = [CENTRAL, INTEGRATION, TRY, OTHER]
             if not t:
                 t = {}
                 for branch in branches:
                     args.branches = branch
-                    args.build_type = ['debug']
-                    retVal = get_metrics_for_day(args)
-                    t = merge_results(t, retVal)
-                    args.build_type = ['asan']
-                    retVal = get_metrics_for_day(args)
-                    t = merge_results(t, retVal)
-                    args.build_type = ['opt', 'pgo']
-                    retVal = get_metrics_for_day(args)
-                    t = merge_results(t, retVal)
+                    for buildtype in [['debug'], ['asan'], ['opt', 'pgo']]:
+                        args.build_type = buildtype
+                        retVal, lag_by_rev = get_metrics_for_day(args, lag_by_rev)
+                        t = merge_results(t, retVal)
 
                 writeFile(t, "stats", args.platform, args.from_date)
             if t == {"blank": True}:
                 t = {}
             results = merge_results(results, t)
+            print(day)
+            print(results)
+            for item in results:
+                print(item)
+                if 'xpcshell' in results[item].keys():
+                    print(results[item]['xpcshell'])
+                print('')
 
             if not f:
                 f, c = get_unique_failures_for_week(args)
@@ -502,10 +549,12 @@ def run(args):
             if f == {"blank": True}:
                 f = {}
             failures = merge_failures(failures, f)
+        writeFile(lag_by_rev, "tids", "all", "all")
+
 
     # type scope
     result = []
-    result.insert(0, ['Platform', 'Config', "# total jobs", "# !try jobs", "# intermittents", "try lag 95% (secs)", "other lag 95% (secs)", "seconds", "hours", "price", "total regressions seen", "unique regressions"])
+    result.insert(0, ['Date', 'Platform', 'Config', "# total jobs", "# !try jobs", "# intermittents", "try lag 95% (secs)", "other lag 95% (secs)", "seconds", "hours", "price", "total regressions seen", "unique regressions"])
     for type in results:
         parts = type.split('/')
         price = sum([(results[type][s]['duration'] / 3600.0) * calculate_cost("%s-%s" % (type, s)) for s in results[type] if s != 'total'])
@@ -530,8 +579,9 @@ def run(args):
         result.append(value)
 #    return result
 
-    result.append([])
-    result.append([])
+    result = []
+#    result.append([])
+#    result.append([])
     # suite scope
     result.append(['Platform', 'Config', 'Suite', "tier", "# total jobs", "# !try jobs", "# intermittents", "try lag 95% (secs)", "other lag 95% (secs)", "seconds", "hours", "price", "total regressions seen", "unique regressions"])
     for type in results:
@@ -562,4 +612,5 @@ def run(args):
                      regressions,
                      unique]
             result.append(value)
+    result = []
     return result

@@ -11,9 +11,9 @@ select:
     - run.tier
     - build.platform
     - build.type
-    - action.end_time
-    - action.request_time
     - action.start_time
+    - action.end_time
+    - run.taskcluster.id
     - failure.classification
     - repo.branch.name
     - build.revision
